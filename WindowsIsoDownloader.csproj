@@ -7,8 +7,14 @@
     <Nullable>enable</Nullable>
     <RootNamespace>WindowsIsoDownloader</RootNamespace>
     <AssemblyName>WindowsIsoDownloader</AssemblyName>
-    <!-- Cross-platform build: keep the runtime identifier unspecified so the
-         produced managed assembly runs anywhere the .NET 10 runtime is available. -->
+    <!-- Architecture-neutral build: the same managed assembly runs on 32-bit
+         (x86) and 64-bit (x64/arm64) as long as a matching .NET 10 runtime is
+         present. AnyCPU is the default for net10.0, but it is stated explicitly
+         here to document the intent, together with the RIDs the project can be
+         published for (see the readme for the 32-bit limitations). -->
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <RuntimeIdentifiers>win-x64;win-x86;linux-x64;linux-arm64;linux-arm</RuntimeIdentifiers>
     <InvariantGlobalization>false</InvariantGlobalization>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>

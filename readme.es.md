@@ -49,6 +49,32 @@ dotnet publish -c Release -r linux-x64 --self-contained true
 dotnet publish -c Release -r win-x64 --self-contained true
 ```
 
+### 32 bits (x86) y otras arquitecturas
+
+El proyecto se compila como **AnyCPU** con `Prefer32Bit` desactivado, así que un
+mismo ensamblado gestionado funciona en runtimes de 32 y 64 bits; en Windows de
+64 bits el proceso por defecto es de 64 bits. Compilaciones adicionales:
+
+```bash
+# Windows de 32 bits (x86)
+dotnet publish -c Release -r win-x86 --self-contained true
+
+# Linux ARM de 64 bits
+dotnet publish -c Release -r linux-arm64 --self-contained true
+```
+
+> **Importante:** el trabajo pesado lo hace el motor del navegador. Playwright
+> solo distribuye un driver de **64 bits** (`win32_x64`, `linux-x64`,
+> `linux-arm64`, macOS). Por eso una compilación `win-x86` funciona en una
+> instalación de Windows de 64 bits (el proceso de 32 bits arranca el driver de
+> 64 bits incluido), pero no puede ejecutarse en un sistema Windows
+> exclusivamente de 32 bits. Del mismo modo, .NET 10 no tiene runtime Linux x86
+> de 32 bits (`linux-x86`) y Playwright no tiene driver para ARM de 32 bits, por
+> lo que una compilación `linux-arm` compila pero el navegador no puede
+> arrancar. Consulta la
+> [guía técnica](docs/TECHNICAL_GUIDE.es.md#81-soporte-de-32-bits-x86-y-arm)
+> para ver la tabla completa.
+
 ## Ejecución
 
 La herramienta lee `config.json` desde la misma carpeta que el ejecutable (si
@@ -119,6 +145,58 @@ idioma. Puedes obtener los valores actuales directamente en la página:
 La herramienta es resistente: después de ejecutar las acciones también busca
 cualquier enlace `a[href*=".iso"]` en la página, por lo que pequeños cambios en
 el marcado normalmente no la rompen.
+
+### Idiomas disponibles
+
+La edición **Windows 11 multi-edition ISO for x64 devices** (`3813`) ofrece los
+siguientes 38 idiomas. Para descargar uno de ellos, sustituye el `Values` de la
+acción `SelectOption` con `Order: 4` en `config.json`:
+
+| Idioma | `id` | `Values` (pegar esto) |
+| --- | --- | --- |
+| Arabic | `27122` | `{"id":"27122","language":"Arabic"}` |
+| Brazilian Portuguese | `27146` | `{"id":"27146","language":"Brazilian Portuguese"}` |
+| Bulgarian | `27123` | `{"id":"27123","language":"Bulgarian"}` |
+| Chinese (Simplified) | `27157` | `{"id":"27157","language":"Chinese (Simplified)"}` |
+| Chinese (Traditional) | `27158` | `{"id":"27158","language":"Chinese (Traditional)"}` |
+| Croatian | `27136` | `{"id":"27136","language":"Croatian"}` |
+| Czech | `27124` | `{"id":"27124","language":"Czech"}` |
+| Danish | `27125` | `{"id":"27125","language":"Danish"}` |
+| Dutch | `27144` | `{"id":"27144","language":"Dutch"}` |
+| English | `27160` | `{"id":"27160","language":"English"}` |
+| English (United Kingdom) | `27128` | `{"id":"27128","language":"English (United Kingdom)"}` |
+| Estonian | `27131` | `{"id":"27131","language":"Estonian"}` |
+| Finnish | `27132` | `{"id":"27132","language":"Finnish"}` |
+| French | `27134` | `{"id":"27134","language":"French"}` |
+| French Canadian | `27133` | `{"id":"27133","language":"French Canadian"}` |
+| German | `27126` | `{"id":"27126","language":"German"}` |
+| Greek | `27127` | `{"id":"27127","language":"Greek"}` |
+| Hebrew | `27135` | `{"id":"27135","language":"Hebrew"}` |
+| Hungarian | `27137` | `{"id":"27137","language":"Hungarian"}` |
+| Italian | `27138` | `{"id":"27138","language":"Italian"}` |
+| Japanese | `27139` | `{"id":"27139","language":"Japanese"}` |
+| Korean | `27140` | `{"id":"27140","language":"Korean"}` |
+| Latvian | `27142` | `{"id":"27142","language":"Latvian"}` |
+| Lithuanian | `27141` | `{"id":"27141","language":"Lithuanian"}` |
+| Norwegian | `27143` | `{"id":"27143","language":"Norwegian"}` |
+| Polish | `27145` | `{"id":"27145","language":"Polish"}` |
+| Portuguese | `27147` | `{"id":"27147","language":"Portuguese"}` |
+| Romanian | `27148` | `{"id":"27148","language":"Romanian"}` |
+| Russian | `27149` | `{"id":"27149","language":"Russian"}` |
+| Serbian Latin | `27152` | `{"id":"27152","language":"Serbian Latin"}` |
+| Slovak | `27150` | `{"id":"27150","language":"Slovak"}` |
+| Slovenian | `27151` | `{"id":"27151","language":"Slovenian"}` |
+| Spanish | `27129` | `{"id":"27129","language":"Spanish"}` |
+| Spanish (Mexico) | `27130` | `{"id":"27130","language":"Spanish (Mexico)"}` |
+| Swedish | `27153` | `{"id":"27153","language":"Swedish"}` |
+| Thai | `27154` | `{"id":"27154","language":"Thai"}` |
+| Turkish | `27155` | `{"id":"27155","language":"Turkish"}` |
+| Ukrainian | `27156` | `{"id":"27156","language":"Ukrainian"}` |
+
+> Estos `id` pertenecen a la edición `3813` (acción `Order: 2`). Los idiomas que
+> puedas echar en falta (por ejemplo indonesio, malayo, persa o vietnamita) no
+> se ofrecen para esta edición. La opción más a prueba de futuro sigue siendo
+> copiar el `value` completo desde la página, como se describió antes.
 
 ## Códigos de salida
 

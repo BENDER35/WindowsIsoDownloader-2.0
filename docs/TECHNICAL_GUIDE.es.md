@@ -200,6 +200,36 @@ dotnet publish -c Release -r win-x64 --self-contained true \
 En tiempo de ejecución la herramienta busca primero `config.json` junto al
 ejecutable y, si no lo encuentra, en el directorio de trabajo actual.
 
+### 8.1 Soporte de 32 bits (x86) y ARM
+
+El proyecto es `AnyCPU` (`PlatformTarget=AnyCPU`, `Prefer32Bit=false`) y declara
+`RuntimeIdentifiers` para `win-x64`, `win-x86`, `linux-x64`, `linux-arm64` y
+`linux-arm`. Todo el código C# es independiente del tamaño de puntero: los
+tamaños y desplazamientos usan `long` (`ContentLength`, total de bytes leídos) y
+el archivo se escribe mediante un `FileStream`, por lo que una ISO mayor de
+2 GiB no se trunca en un proceso de 32 bits.
+
+```bash
+dotnet publish -c Release -r win-x86 --self-contained true     # Windows x86 de 32 bits
+dotnet publish -c Release -r linux-arm --self-contained true   # Linux ARM de 32 bits
+```
+
+Lo que puede ejecutarse realmente lo limita el motor del navegador, no el código
+gestionado:
+
+| Destino | ¿Compila? | ¿Ejecuta? |
+| --- | --- | --- |
+| `win-x64` | Sí | Sí |
+| `win-x86` | Sí | Solo en Windows de 64 bits: el proceso de 32 bits arranca el `node.exe` de 64 bits incluido en Playwright. Un Windows exclusivamente de 32 bits no puede ejecutarlo. |
+| `linux-x64` | Sí | Sí |
+| `linux-arm64` | Sí | Sí |
+| `linux-arm` | Sí | No: Playwright incluye un driver `linux-x64` para Linux no arm64, así que el navegador no puede arrancar. |
+| `linux-x86` | No | No: .NET 10 no tiene apphost Linux x86 de 32 bits (`NETSDK1084`). |
+
+`Driver.GetPath`, dentro de `Microsoft.Playwright`, fija `win32_x64` en Windows y
+elige `linux-arm64` frente a `linux-x64` en Linux, que es la causa raíz de las
+limitaciones de ejecución anteriores.
+
 ## 9. Códigos de salida
 
 | Código | Significado |
@@ -222,7 +252,66 @@ Si la herramienta deja de encontrar el enlace:
    compilaciones del navegador estén al día y pasen las comprobaciones de
    compatibilidad del sitio.
 
-## 11. Notas de seguridad y legales
+## 11. Referencia de idiomas
+
+El `Values` de la acción `SelectOption` con `Order: 4` es la cadena JSON
+`{"id":"<skuId>","language":"<nombre>"}` tomada de los `<option>` de
+`#product-languages`. Microsoft genera esas opciones a partir de la lista de
+SKU del conector de descarga
+(`getskuinformationbyproductedition?profile=606624d44113&productEditionId=3813`),
+cuyas entradas tienen el formato `{"Id":"27160","Language":"English",...}`. Por
+tanto el mapeo entre `Id` y `Language` es 1:1, y por eso un idioma se selecciona
+pegando `{"id":"27160","language":"English"}`.
+
+Los 38 idiomas disponibles para la edición `3813` son:
+
+| Idioma | `id` | `Values` |
+| --- | --- | --- |
+| Arabic | `27122` | `{"id":"27122","language":"Arabic"}` |
+| Brazilian Portuguese | `27146` | `{"id":"27146","language":"Brazilian Portuguese"}` |
+| Bulgarian | `27123` | `{"id":"27123","language":"Bulgarian"}` |
+| Chinese (Simplified) | `27157` | `{"id":"27157","language":"Chinese (Simplified)"}` |
+| Chinese (Traditional) | `27158` | `{"id":"27158","language":"Chinese (Traditional)"}` |
+| Croatian | `27136` | `{"id":"27136","language":"Croatian"}` |
+| Czech | `27124` | `{"id":"27124","language":"Czech"}` |
+| Danish | `27125` | `{"id":"27125","language":"Danish"}` |
+| Dutch | `27144` | `{"id":"27144","language":"Dutch"}` |
+| English | `27160` | `{"id":"27160","language":"English"}` |
+| English (United Kingdom) | `27128` | `{"id":"27128","language":"English (United Kingdom)"}` |
+| Estonian | `27131` | `{"id":"27131","language":"Estonian"}` |
+| Finnish | `27132` | `{"id":"27132","language":"Finnish"}` |
+| French | `27134` | `{"id":"27134","language":"French"}` |
+| French Canadian | `27133` | `{"id":"27133","language":"French Canadian"}` |
+| German | `27126` | `{"id":"27126","language":"German"}` |
+| Greek | `27127` | `{"id":"27127","language":"Greek"}` |
+| Hebrew | `27135` | `{"id":"27135","language":"Hebrew"}` |
+| Hungarian | `27137` | `{"id":"27137","language":"Hungarian"}` |
+| Italian | `27138` | `{"id":"27138","language":"Italian"}` |
+| Japanese | `27139` | `{"id":"27139","language":"Japanese"}` |
+| Korean | `27140` | `{"id":"27140","language":"Korean"}` |
+| Latvian | `27142` | `{"id":"27142","language":"Latvian"}` |
+| Lithuanian | `27141` | `{"id":"27141","language":"Lithuanian"}` |
+| Norwegian | `27143` | `{"id":"27143","language":"Norwegian"}` |
+| Polish | `27145` | `{"id":"27145","language":"Polish"}` |
+| Portuguese | `27147` | `{"id":"27147","language":"Portuguese"}` |
+| Romanian | `27148` | `{"id":"27148","language":"Romanian"}` |
+| Russian | `27149` | `{"id":"27149","language":"Russian"}` |
+| Serbian Latin | `27152` | `{"id":"27152","language":"Serbian Latin"}` |
+| Slovak | `27150` | `{"id":"27150","language":"Slovak"}` |
+| Slovenian | `27151` | `{"id":"27151","language":"Slovenian"}` |
+| Spanish | `27129` | `{"id":"27129","language":"Spanish"}` |
+| Spanish (Mexico) | `27130` | `{"id":"27130","language":"Spanish (Mexico)"}` |
+| Swedish | `27153` | `{"id":"27153","language":"Swedish"}` |
+| Thai | `27154` | `{"id":"27154","language":"Thai"}` |
+| Turkish | `27155` | `{"id":"27155","language":"Turkish"}` |
+| Ukrainian | `27156` | `{"id":"27156","language":"Ukrainian"}` |
+
+> Seleccionar un idioma no es más que una acción `SelectOption`; el valor debe
+> coincidir exactamente con el `<option value>`, y por eso se usa la cadena JSON
+> completa (no solo el id numérico). La lista está ligada a la edición, así que
+> si `3813` cambia hay que volver a leer las opciones de la página.
+
+## 12. Notas de seguridad y legales
 
 - La herramienta descarga únicamente las ISO públicas y oficiales de Microsoft;
   no elude ninguna licencia.
