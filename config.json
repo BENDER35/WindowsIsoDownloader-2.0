@@ -1,12 +1,12 @@
 {
 	"DownloadFolder": ".",
-	"DownloadFilename": "windows11.iso",
+	"DownloadFilename": "windows10.iso",
 	"Actions":	[
 		{
 			"Order": 1,
 			"Kind": "Goto",
 			"Parameters": {
-				"Url": "https://www.microsoft.com/en-us/software-download/windows11/"
+				"Url": "https://www.microsoft.com/en-us/software-download/windows10ISO"
 			}
 		},
 		{
@@ -14,7 +14,7 @@
 			"Kind": "SelectOption",
 			"Parameters": {
 				"Selector": "#product-edition",
-				"Values": "3813"
+				"Values": "2618"
 			}
 		},
 		{
@@ -30,8 +30,7 @@
 			"WaitBeforeAction": 4000,
 			"Parameters": {
 				"Selector": "#product-languages",
-				"Values": "{\"id\":\"27160\",\"language\":\"English\"}"
-
+				"Values": "{\"id\":\"16067\",\"language\":\"English\"}"
 			}
 		},
 		{

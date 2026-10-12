@@ -1,19 +1,32 @@
-# Windows 11 ISO Downloader
+# Windows 10 ISO Downloader
 
-Windows 11 ISO Downloader es una pequeña herramienta multiplataforma que
-descarga de forma programática la última **ISO oficial de Windows 11** directa
+Windows 10 ISO Downloader es una pequeña herramienta multiplataforma que
+descarga de forma programática la última **ISO oficial de Windows 10** directa
 de los servidores de Microsoft. Controla un navegador Firefox real (en modo
 headless) mediante [Playwright](https://playwright.dev/dotnet/) para recorrer la
 página de descarga, obtiene el enlace temporal de descarga y después transmite
 la ISO a disco con una barra de progreso en vivo.
 
 Resulta útil en proyectos que construyen instaladores personalizados de
-Windows 11 (por ejemplo
+Windows 10 (por ejemplo
 [`tiny11builder`](https://github.com/ntdevlabs/tiny11builder)), donde los pasos
 manuales del navegador son la única parte que no se puede automatizar.
 
+El flujo está basado en datos (ver [`config.json`](#configuración-configjson)),
+así que la misma herramienta también puede descargar Windows 11 u otra edición
+cambiando unos pocos valores; la configuración incluida apunta a la
+**Windows 10 (multi-edition ISO)**.
+
 > **Idioma:** [English](readme.md) | [Español](readme.es.md)
 > **Guía técnica:** [English](docs/TECHNICAL_GUIDE.md) | [Español](docs/TECHNICAL_GUIDE.es.md)
+
+> **Estado de soporte de Windows 10:** el soporte ordinario terminó el
+> **14 de octubre de 2025**; el **ESU** de consumo llega hasta el
+> **12 de octubre de 2027** y el ESU comercial/educativo hasta el
+> **10 de octubre de 2028**. Windows Update también dejará de funcionar en
+> **Windows 7 hasta Windows 10 sin ESU** cuando se roten los certificados del
+> servicio de actualizaciones (mayo/junio de 2027). Ver
+> [Fin de soporte de Windows 10 y actualizaciones de seguridad extendidas](#fin-de-soporte-de-windows-10-y-actualizaciones-de-seguridad-extendidas).
 
 ## Requisitos
 
@@ -99,7 +112,7 @@ WindowsIsoDownloader.exe
 ```
 
 La ISO se escribe en la carpeta configurada en `config.json` (por defecto el
-directorio de trabajo actual, generando `./windows11.iso`).
+directorio de trabajo actual, generando `./windows10.iso`).
 
 ## Configuración (`config.json`)
 
@@ -137,70 +150,112 @@ Acciones soportadas:
 Microsoft cambia periódicamente los identificadores internos de la edición y del
 idioma. Puedes obtener los valores actuales directamente en la página:
 
-1. Abre la [página de descarga de Windows 11](https://www.microsoft.com/en-us/software-download/windows11).
+1. Abre la [página de descarga de la ISO de Windows 10](https://www.microsoft.com/en-us/software-download/windows10ISO).
 2. Abre las herramientas de desarrollador del navegador.
 3. Id de edición: inspecciona el `<select>` `#product-edition`. El valor de la
-   opción "multi-edition ISO for x64 devices" va en la acción `Order: 2`.
+   opción "Windows 10 (multi-edition ISO)" va en la acción `Order: 2`.
 4. Idioma: elige la edición, pulsa **Confirm** y luego inspecciona el
    `<select>` `#product-languages`. Copia el `value` completo de tu idioma
-   (tiene el formato `{"id":"27160","language":"English"}`) en la acción
+   (tiene el formato `{"id":"16067","language":"English"}`) en la acción
    `Order: 4`.
 
 La herramienta es resistente: después de ejecutar las acciones también busca
 cualquier enlace `a[href*=".iso"]` en la página, por lo que pequeños cambios en
-el marcado normalmente no la rompen.
+el marcado normalmente no la rompen. Cuando Microsoft ofrece más de una imagen
+—Windows 10 publica una ISO de **32 bits** y otra de **64 bits**— la herramienta
+elige automáticamente la de **64 bits**.
 
 ### Idiomas disponibles
 
-La edición **Windows 11 multi-edition ISO for x64 devices** (`3813`) ofrece los
-siguientes 38 idiomas. Para descargar uno de ellos, sustituye el `Values` de la
-acción `SelectOption` con `Order: 4` en `config.json`:
+La edición **Windows 10 (multi-edition ISO)** (`2618`) ofrece los siguientes 38
+idiomas. Para descargar uno de ellos, sustituye el `Values` de la acción
+`SelectOption` con `Order: 4` en `config.json`:
 
 | Idioma | `id` | `Values` (pegar esto) |
 | --- | --- | --- |
-| Arabic | `27122` | `{"id":"27122","language":"Arabic"}` |
-| Brazilian Portuguese | `27146` | `{"id":"27146","language":"Brazilian Portuguese"}` |
-| Bulgarian | `27123` | `{"id":"27123","language":"Bulgarian"}` |
-| Chinese (Simplified) | `27157` | `{"id":"27157","language":"Chinese (Simplified)"}` |
-| Chinese (Traditional) | `27158` | `{"id":"27158","language":"Chinese (Traditional)"}` |
-| Croatian | `27136` | `{"id":"27136","language":"Croatian"}` |
-| Czech | `27124` | `{"id":"27124","language":"Czech"}` |
-| Danish | `27125` | `{"id":"27125","language":"Danish"}` |
-| Dutch | `27144` | `{"id":"27144","language":"Dutch"}` |
-| English | `27160` | `{"id":"27160","language":"English"}` |
-| English (United Kingdom) | `27128` | `{"id":"27128","language":"English (United Kingdom)"}` |
-| Estonian | `27131` | `{"id":"27131","language":"Estonian"}` |
-| Finnish | `27132` | `{"id":"27132","language":"Finnish"}` |
-| French | `27134` | `{"id":"27134","language":"French"}` |
-| French Canadian | `27133` | `{"id":"27133","language":"French Canadian"}` |
-| German | `27126` | `{"id":"27126","language":"German"}` |
-| Greek | `27127` | `{"id":"27127","language":"Greek"}` |
-| Hebrew | `27135` | `{"id":"27135","language":"Hebrew"}` |
-| Hungarian | `27137` | `{"id":"27137","language":"Hungarian"}` |
-| Italian | `27138` | `{"id":"27138","language":"Italian"}` |
-| Japanese | `27139` | `{"id":"27139","language":"Japanese"}` |
-| Korean | `27140` | `{"id":"27140","language":"Korean"}` |
-| Latvian | `27142` | `{"id":"27142","language":"Latvian"}` |
-| Lithuanian | `27141` | `{"id":"27141","language":"Lithuanian"}` |
-| Norwegian | `27143` | `{"id":"27143","language":"Norwegian"}` |
-| Polish | `27145` | `{"id":"27145","language":"Polish"}` |
-| Portuguese | `27147` | `{"id":"27147","language":"Portuguese"}` |
-| Romanian | `27148` | `{"id":"27148","language":"Romanian"}` |
-| Russian | `27149` | `{"id":"27149","language":"Russian"}` |
-| Serbian Latin | `27152` | `{"id":"27152","language":"Serbian Latin"}` |
-| Slovak | `27150` | `{"id":"27150","language":"Slovak"}` |
-| Slovenian | `27151` | `{"id":"27151","language":"Slovenian"}` |
-| Spanish | `27129` | `{"id":"27129","language":"Spanish"}` |
-| Spanish (Mexico) | `27130` | `{"id":"27130","language":"Spanish (Mexico)"}` |
-| Swedish | `27153` | `{"id":"27153","language":"Swedish"}` |
-| Thai | `27154` | `{"id":"27154","language":"Thai"}` |
-| Turkish | `27155` | `{"id":"27155","language":"Turkish"}` |
-| Ukrainian | `27156` | `{"id":"27156","language":"Ukrainian"}` |
+| Arabic | `16058` | `{"id":"16058","language":"Arabic"}` |
+| Brazilian Portuguese | `16059` | `{"id":"16059","language":"Brazilian Portuguese"}` |
+| Bulgarian | `16060` | `{"id":"16060","language":"Bulgarian"}` |
+| Chinese (Simplified) | `16061` | `{"id":"16061","language":"Chinese (Simplified)"}` |
+| Chinese (Traditional) | `16062` | `{"id":"16062","language":"Chinese (Traditional)"}` |
+| Croatian | `16063` | `{"id":"16063","language":"Croatian"}` |
+| Czech | `16064` | `{"id":"16064","language":"Czech"}` |
+| Danish | `16065` | `{"id":"16065","language":"Danish"}` |
+| Dutch | `16066` | `{"id":"16066","language":"Dutch"}` |
+| English | `16067` | `{"id":"16067","language":"English"}` |
+| English International | `16068` | `{"id":"16068","language":"English International"}` |
+| Estonian | `16069` | `{"id":"16069","language":"Estonian"}` |
+| Finnish | `16070` | `{"id":"16070","language":"Finnish"}` |
+| French | `16071` | `{"id":"16071","language":"French"}` |
+| French Canadian | `16072` | `{"id":"16072","language":"French Canadian"}` |
+| German | `16073` | `{"id":"16073","language":"German"}` |
+| Greek | `16074` | `{"id":"16074","language":"Greek"}` |
+| Hebrew | `16075` | `{"id":"16075","language":"Hebrew"}` |
+| Hungarian | `16076` | `{"id":"16076","language":"Hungarian"}` |
+| Italian | `16077` | `{"id":"16077","language":"Italian"}` |
+| Japanese | `16078` | `{"id":"16078","language":"Japanese"}` |
+| Korean | `16079` | `{"id":"16079","language":"Korean"}` |
+| Latvian | `16080` | `{"id":"16080","language":"Latvian"}` |
+| Lithuanian | `16081` | `{"id":"16081","language":"Lithuanian"}` |
+| Norwegian | `16082` | `{"id":"16082","language":"Norwegian"}` |
+| Polish | `16083` | `{"id":"16083","language":"Polish"}` |
+| Portuguese | `16084` | `{"id":"16084","language":"Portuguese"}` |
+| Romanian | `16085` | `{"id":"16085","language":"Romanian"}` |
+| Russian | `16086` | `{"id":"16086","language":"Russian"}` |
+| Serbian Latin | `16087` | `{"id":"16087","language":"Serbian Latin"}` |
+| Slovak | `16088` | `{"id":"16088","language":"Slovak"}` |
+| Slovenian | `16089` | `{"id":"16089","language":"Slovenian"}` |
+| Spanish | `16090` | `{"id":"16090","language":"Spanish"}` |
+| Spanish (Mexico) | `16091` | `{"id":"16091","language":"Spanish (Mexico)"}` |
+| Swedish | `16092` | `{"id":"16092","language":"Swedish"}` |
+| Thai | `16093` | `{"id":"16093","language":"Thai"}` |
+| Turkish | `16094` | `{"id":"16094","language":"Turkish"}` |
+| Ukrainian | `16095` | `{"id":"16095","language":"Ukrainian"}` |
 
-> Estos `id` pertenecen a la edición `3813` (acción `Order: 2`). Los idiomas que
-> puedas echar en falta (por ejemplo indonesio, malayo, persa o vietnamita) no
-> se ofrecen para esta edición. La opción más a prueba de futuro sigue siendo
-> copiar el `value` completo desde la página, como se describió antes.
+> Estos `id` pertenecen a la edición de Windows 10 `2618` (acción `Order: 2`).
+> Los idiomas que puedas echar en falta (por ejemplo indonesio, malayo, persa o
+> vietnamita) no se ofrecen para esta edición. La opción más a prueba de futuro
+> sigue siendo copiar el `value` completo desde la página, como se describió
+> antes.
+
+## Fin de soporte de Windows 10 y actualizaciones de seguridad extendidas
+
+Windows 10 alcanzó el **fin de soporte el 14 de octubre de 2025**: ya no recibe
+actualizaciones de seguridad gratuitas y solo el programa **Extended Security
+Updates (ESU)** lo mantiene parcheado.
+
+| Etapa | Termina | A quién aplica |
+| --- | --- | --- |
+| Soporte ordinario | **14 de octubre de 2025** | Todos |
+| ESU – Año 1 | **13 de octubre de 2026** | Comercial / educativo |
+| ESU – Año 2 | **12 de octubre de 2027** | Consumidores (fin del ESU de consumo); Año 2 para comercial |
+| ESU – Año 3 | **10 de octubre de 2028** | Solo comercial / educativo |
+
+- Los **consumidores** pueden inscribirse en el ESU —gratis en el Espacio
+  Económico Europeo y con una cuenta de Microsoft / puntos de Microsoft Rewards
+  en el resto— y quedan cubiertos hasta el **12 de octubre de 2027**.
+- Los clientes **comerciales / educativos** pueden comprar hasta **tres años** de
+  ESU: el Año 1 termina el 13 de octubre de 2026, el Año 2 el 12 de octubre de
+  2027 y el Año 3 el **10 de octubre de 2028**.
+- El ESU contiene **solo** actualizaciones de seguridad críticas e importantes;
+  ninguna característica nueva, corrección no de seguridad o cambio de diseño.
+
+> **Advertencia — rotación de certificados de Windows Update.** Los
+> certificados que protegen la conexión con Windows Update caducan en **2027**
+> (sus reemplazos deben instalarse **antes del 17 de mayo de 2027** o **antes
+> del 19 de junio de 2027**, según el producto). Los equipos que nunca reciban
+> los certificados de reemplazo —**Windows 7, Windows 8 / 8.1, cualquier
+> instalación de Windows 10 sin ESU** y las versiones de Windows Server fuera de
+> soporte— **perderán el acceso a Windows Update** y dejarán de recibir
+> actualizaciones por completo. Es una rotación de los **certificados raíz** del
+> servicio y no tiene relación con esta herramienta. Para seguir actualizado
+> hace falta Windows 10 **con ESU** (instalando la actualización mensual, al
+> menos la de julio de 2026, antes del 19 de junio de 2027) o un sistema
+> operativo soportado (Windows 11 24H2 o posterior, Windows Server 2022 o
+> posterior, o las versiones LTSC que Microsoft indica).
+>
+> Anuncio oficial:
+> <https://techcommunity.microsoft.com/blog/windows-itpro-blog/prepare-for-windows-update-certificate-rotation-in-2027/4562463>
 
 ## Códigos de salida
 
@@ -225,3 +280,62 @@ acción `SelectOption` con `Order: 4` en `config.json`:
 ## Licencia
 
 Consulta [LICENSE](LICENSE).
+
+
+
+
+## Cierre de Windows Update — notas prácticas
+
+> Notas personales recopiladas por el mantenedor el 12 de octubre de 2026.
+> Complementan el resumen oficial de arriba con soluciones prácticas y sus
+> contrapartidas; no son indicaciones oficiales de Microsoft.
+
+ATENCION, AVISO (12 de octubre de 2026): microsoft cortara el acceso a partir
+del 19 de junio del 2027 el acceso a windows update a todos los equipos que
+tengan windows 10 sin ESU hacia abajo (el bloqueo anterior fue hasta windows
+vista-server 2008 sin R2), esto logicamente afecta a las versiones de servidor
+(server 2008 R2 hasta server 2019, a partir de server 2022, no afecta el cierre
+de windows update), esto es debido a la caducidad de los certificados raiz
+del servicio de actualizaciones que caduca a partir de esta fecha, si quieres
+echar un vistazo al link oficial de la noticia de microsoft, aqui te lo paso (usa la traduccion del navegador, esta en ingles):
+
+https://techcommunity.microsoft.com/blog/windows-itpro-blog/prepare-for-windows-update-certificate-rotation-in-2027/4562463
+
+recuerda que los certificados raiz forman parte de la navegacion por internet, una de las caracteristicas del protocolo https
+es que ahora todo lo que se transfiere al router esta cifrado (anteriormente no era asi), pero para que programas que se uti
+lizan para analizar todo lo que se transfiere en una red domestica como wireshark no surta ningun efecto (no se vea ningun
+dato sensible), los certificados raiz deben de funcionar y estar al dia, si no funciona, da error de certificado en el navegador
+y los programas que conectan a internet dejaran de funcionar, esto lo tienes que tener en cuenta a la hora de utilizar un windows
+antiguo instalado en el ordenador (por cierto, el cierre de windows update tambien afecta a las maquinas virtuales, o sea, a los PCs
+arrancados dentro de un equipo fisico).
+
+cuando llegue la fecha de caducidad del certificado raiz es posible que en los offices instalados en windows sin soporte den errores
+de comprobacion de actualizaciones (hasta 10 y server 2019 que son cliente y servidor respectivamente se puede instalar el 2021-365
+7 y 8, hasta office 2016), solucionandose esto desactivando las actualizaciones de office (cuando llegue la fecha de caducidad de
+dichos certificados raiz).
+
+en la ventana anterior (las actualizaciones automaticas se impusieron a partir de windows 2000) no dio ningun tipo de fallo a la
+hora de arrancar el sistema operativo, unicamente a la hora de abrir la pagina de microsoft update o iniciar el windows update.
+(pase la experiencia de la ventana anterior de cierre del update).
+
+en el caso de que sea windows 10 con ESU, windows 11 24H2, servers LTSC de 2019 y 2016 y server 2022, microsoft ha puesto como
+metodo oficial para solucionar el problema, la actualizacion, o sea, que tendras que actualizar el segundo martes de cada mes
+hasta la fecha del 19 de junio de 2027 en el cual ya...piano, piano (entenderas lo que te digo).
+
+en el caso de que te encuentres con este tipo de equipos, estos son los caminos que tienes:
+
+-  comprar el ESU (windows 10) (en el caso de paises de la union europea, no tiene ningun coste) 
+-  parchear el update para acceder al ESU, que el unico parche (y recomendable para windows 10) es el MAS (microsoft activation script)
+-  instalar un parche no oficial para actualizar los certificados raiz, que es el legacy update
+-  en el caso de versiones compatibles (no es obligatorio por el momento a partir de 11 24H2, windows 10 sin ESU es imprescindible
+a medias) aceptar las actualizaciones a versiones mayores de windows via update o haciendo una actualizacion desde los medios de
+instalacion de windows.
+-  mantener la instalacion de windows y hacer un dual boot con linux (no aconsejable).
+-  desinstalar windows e instalar linux junto con una maquina virtual de windows (ahi se permite todo, desde originales hasta modificados)
+
+en el caso de que elijas la opcion sensata (la ultima), recuerda que debes de montar vmware o virtualbox en linux (instala linux en el ordenador
+logicamente) y la maquina virtual con el windows a elegir (que ahi si puedes instalar windows antiguos) de manera oficial hasta junio de 2027, posteriormente
+no va a funcionar y solo vas a poder instalar y actualizar este tipo de PCs por metodos no oficiales.
+
+en el caso de que hayas perdido tu empleo o el curso al haberle dicho este inconveniente, mucha suerte en tu busqueda de empleo o en la busqueda de curso
+(que espero que lo encuentres), con todas estas pistas que te digo ya veras como seguro al final encuentras el empleo o curso soñado.

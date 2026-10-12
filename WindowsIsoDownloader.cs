@@ -57,7 +57,7 @@ if (exitCode != 0)
 }
 
 Console.WriteLine("[Success] Playwright dependencies installed.");
-Console.WriteLine("[Info] Trying to obtain the Windows 11 ISO download link...");
+Console.WriteLine("[Info] Trying to obtain the ISO download link...");
 
 float currentProgress = 0;
 string? isoFileUrl = null;
@@ -117,7 +117,7 @@ if (!isoFileUrl.Contains(".iso"))
 }
 
 Console.WriteLine($"[Success] Download link found: {isoFileUrl}");
-Console.WriteLine("[Info] Windows 11 iso download in progress...");
+Console.WriteLine("[Info] ISO download in progress...");
 using (var httpClient = new HttpClient())
 {
     httpClient.Timeout = TimeSpan.FromHours(2);
@@ -199,7 +199,33 @@ async Task<IElementHandle?> RunActionsAsync(IPage page, List<BrowserAction> acti
 
 async Task<string?> ResolveIsoUrlAsync(IPage page, IElementHandle? downloadButton)
 {
-    // Prefer the element located by the QuerySelector action from config.json.
+    // Poll the page for every anchor that points to an .iso file. The download
+    // section renders asynchronously, so give it a few seconds. This also makes
+    // the tool resilient to layout changes.
+    List<string> isoLinks = new();
+    for (int attempt = 0; attempt < 10; attempt++)
+    {
+        // Return a JSON string and deserialize it ourselves: Playwright's own
+        // EvaluateAsync deserializer does not round-trip a List<string> cleanly.
+        var json = await page.EvaluateAsync<string>(
+            "() => JSON.stringify(Array.from(document.querySelectorAll('a[href*=\".iso\"]')).map(a => a.href))");
+        isoLinks = JsonSerializer.Deserialize<List<string>>(json) ?? new();
+        if (isoLinks.Count > 0)
+        {
+            break;
+        }
+        await page.WaitForTimeoutAsync(1000);
+    }
+
+    // Some pages expose more than one image; the Windows 10 page, for example,
+    // offers a 32-bit and a 64-bit ISO. Prefer the 64-bit one.
+    var preferred = isoLinks.FirstOrDefault(href => href.Contains("x64", StringComparison.OrdinalIgnoreCase));
+    if (!string.IsNullOrWhiteSpace(preferred))
+    {
+        return preferred;
+    }
+
+    // Otherwise prefer the element located by the QuerySelector action from config.json.
     if (downloadButton is not null)
     {
         var href = await downloadButton.EvaluateAsync<string>("element => element.href");
@@ -209,23 +235,8 @@ async Task<string?> ResolveIsoUrlAsync(IPage page, IElementHandle? downloadButto
         }
     }
 
-    // Fallback: poll the page for any anchor pointing to an .iso file. This makes the
-    // tool resilient to layout changes and to the download section rendering lazily.
-    for (int attempt = 0; attempt < 10; attempt++)
-    {
-        var link = await page.QuerySelectorAsync("a[href*='.iso']");
-        if (link is not null)
-        {
-            var href = await link.EvaluateAsync<string>("element => element.href");
-            if (!string.IsNullOrWhiteSpace(href))
-            {
-                return href;
-            }
-        }
-        await page.WaitForTimeoutAsync(1000);
-    }
-
-    return null;
+    // Last resort: the first .iso link found.
+    return isoLinks.FirstOrDefault();
 }
 
 void ProgressChanged(object? sender, float e)
