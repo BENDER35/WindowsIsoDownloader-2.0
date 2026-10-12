@@ -57,11 +57,15 @@ mismo ensamblado gestionado funciona en runtimes de 32 y 64 bits; en Windows de
 
 ```bash
 # Windows de 32 bits (x86)
-dotnet publish -c Release -r win-x86 --self-contained true
+dotnet publish -c Release -r win-x86 --self-contained true -p:PlaywrightPlatform=win
 
 # Linux ARM de 64 bits
 dotnet publish -c Release -r linux-arm64 --self-contained true
 ```
+
+El flag `-p:PlaywrightPlatform=win` indica a Playwright qué driver incluir: para
+un identificador de runtime no reconocido como `win-x86`, de lo contrario
+copiaría el driver del navegador de **todas** las plataformas (unos 575 MB).
 
 > **Importante:** el trabajo pesado lo hace el motor del navegador. Playwright
 > solo distribuye un driver de **64 bits** (`win32_x64`, `linux-x64`,

@@ -54,11 +54,15 @@ default process is 64-bit. Additional builds:
 
 ```bash
 # 32-bit Windows (x86)
-dotnet publish -c Release -r win-x86 --self-contained true
+dotnet publish -c Release -r win-x86 --self-contained true -p:PlaywrightPlatform=win
 
 # 64-bit ARM Linux
 dotnet publish -c Release -r linux-arm64 --self-contained true
 ```
+
+The `-p:PlaywrightPlatform=win` flag tells Playwright which driver to bundle: for
+an unrecognized runtime identifier such as `win-x86` it would otherwise copy the
+browser driver of **every** platform (about 575 MB).
 
 > **Important:** the heavy lifting is done by the browser engine. Playwright only
 > ships a **64-bit** driver (`win32_x64`, `linux-x64`, `linux-arm64`, macOS). A

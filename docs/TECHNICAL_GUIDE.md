@@ -197,27 +197,36 @@ falls back to the current working directory.
 
 ### 8.1 32-bit (x86) and ARM support
 
-The project is `AnyCPU` (`PlatformTarget=AnyCPU`, `Prefer32Bit=false`) and
-declares `RuntimeIdentifiers` for `win-x64`, `win-x86`, `linux-x64`,
-`linux-arm64` and `linux-arm`. All the C# code is pointer-size agnostic: sizes
-and offsets use `long` (`ContentLength`, total bytes read) and the file is
-written through a `FileStream`, so an ISO larger than 2 GiB is not truncated by
-a 32-bit process.
+The project is `AnyCPU` (`PlatformTarget=AnyCPU`, `Prefer32Bit=false`) and the
+C# code is pointer-size agnostic: sizes and offsets use `long`
+(`ContentLength`, total bytes read) and the file is written through a
+`FileStream`, so an ISO larger than 2 GiB is not truncated by a 32-bit process.
 
 ```bash
-dotnet publish -c Release -r win-x86 --self-contained true     # 32-bit x86 Windows
-dotnet publish -c Release -r linux-arm --self-contained true   # 32-bit ARM Linux
+# 32-bit x86 Windows
+dotnet publish -c Release -r win-x86 --self-contained true -p:PlaywrightPlatform=win
+
+# 32-bit ARM Linux
+dotnet publish -c Release -r linux-arm --self-contained true
 ```
+
+`Microsoft.Playwright.targets` selects the driver folder from the active
+`RuntimeIdentifier`. `win-x86` and `linux-arm` are not recognized by that target,
+and an unrecognized RID makes it copy **every** platform's driver (~575 MB).
+Passing `-p:PlaywrightPlatform=win` pins the copy step to `win32_x64`, the only
+driver that exists for Windows, and keeps the 32-bit package small. This is also
+why the `.csproj` deliberately does **not** declare `RuntimeIdentifiers`
+(declaring it would trigger the same fallback on a plain build).
 
 What can actually run is limited by the browser engine, not by the managed code:
 
 | Target | Builds? | Runs? |
 | --- | --- | --- |
 | `win-x64` | Yes | Yes |
-| `win-x86` | Yes | On 64-bit Windows only: the 32-bit process starts Playwright's bundled 64-bit `node.exe`. A 32-bit-only Windows cannot run it. |
+| `win-x86` | Yes (add `-p:PlaywrightPlatform=win`) | On 64-bit Windows only: the 32-bit process starts Playwright's bundled 64-bit `node.exe`. A 32-bit-only Windows cannot run it. |
 | `linux-x64` | Yes | Yes |
 | `linux-arm64` | Yes | Yes |
-| `linux-arm` | Yes | No: Playwright ships an `linux-x64` driver for non-arm64 Linux, so the browser cannot start. |
+| `linux-arm` | Yes | No: Playwright ships the `linux-x64` driver for non-arm64 Linux, so the browser cannot start. |
 | `linux-x86` | No | No: .NET 10 has no 32-bit x86 Linux apphost (`NETSDK1084`). |
 
 `Driver.GetPath` in `Microsoft.Playwright` hard-codes `win32_x64` on Windows and

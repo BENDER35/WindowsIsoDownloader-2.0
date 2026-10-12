@@ -7,14 +7,17 @@
     <Nullable>enable</Nullable>
     <RootNamespace>WindowsIsoDownloader</RootNamespace>
     <AssemblyName>WindowsIsoDownloader</AssemblyName>
-    <!-- Architecture-neutral build: the same managed assembly runs on 32-bit
-         (x86) and 64-bit (x64/arm64) as long as a matching .NET 10 runtime is
-         present. AnyCPU is the default for net10.0, but it is stated explicitly
-         here to document the intent, together with the RIDs the project can be
-         published for (see the readme for the 32-bit limitations). -->
+    <!-- Architecture-neutral managed code: the same assembly runs on 32-bit
+         (x86) and 64-bit (x64/arm64) runtimes as long as a matching .NET 10
+         runtime is present, so AnyCPU is stated explicitly here (it is the
+         default for net10.0) and Prefer32Bit is disabled.
+         Note: do NOT declare <RuntimeIdentifiers> here. Microsoft.Playwright
+         selects the driver folder from the active RuntimeIdentifier, and an
+         unrecognized RID (or a list of them) makes it copy every platform's
+         ~575 MB driver set into the output. See the readme/technical guide for
+         the 32-bit (win-x86) publish command. -->
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
-    <RuntimeIdentifiers>win-x64;win-x86;linux-x64;linux-arm64;linux-arm</RuntimeIdentifiers>
     <InvariantGlobalization>false</InvariantGlobalization>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
