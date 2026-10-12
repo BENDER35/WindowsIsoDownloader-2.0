@@ -5,7 +5,9 @@ downloads the latest official **Windows 10 ISO** directly from Microsoft's
 servers. It drives a real (headless) Firefox browser with
 [Playwright](https://playwright.dev/dotnet/) to walk through the download page,
 collects the temporary download link and then streams the ISO to disk with a
-live progress bar.
+live progress bar (size, speed and ETA). Downloads are **resumable** — an
+interrupted run continues from a `.part` file — and the tool exposes a small
+**command line interface** for scripting.
 
 It is useful in projects that build custom Windows 10 installers (for example
 [`tiny11builder`](https://github.com/ntdevlabs/tiny11builder)), where the manual
@@ -46,6 +48,13 @@ dotnet build -c Release
 ```
 
 The build output is placed in `bin/Release/net10.0/`.
+
+The solution also ships an xUnit test project (download resume, configuration
+parsing, CLI parsing, link selection, ISO validation, …):
+
+```bash
+dotnet test -c Release
+```
 
 To produce a self-contained executable for a specific platform:
 
@@ -107,6 +116,38 @@ WindowsIsoDownloader.exe
 The ISO is written to the folder configured in `config.json` (the default is
 the current working directory, producing `./windows10.iso`).
 
+If the ISO already exists the tool stops immediately; pass `--force` to download
+it again. Should the run be interrupted (network drop, `Ctrl+C`), the partial
+data is kept in `windows10.iso.part` and the next run resumes from there.
+
+### Command line options
+
+| Option | Description |
+| --- | --- |
+| `-c`, `--config <path>` | Use a specific `config.json` file. |
+| `-o`, `--output <path>` | Full path for the ISO (overrides `DownloadFolder`/`DownloadFilename`). |
+| `-f`, `--force` | Overwrite an existing ISO. |
+| `--dry-run` | Resolve the download link but do not download. |
+| `--arch <x64\|x86\|arm64\|any>` | Preferred image architecture (default `x64`). |
+| `--headed` | Show the browser window (useful to debug). |
+| `--headless` | Force headless mode (default). |
+| `--slow-mo <ms>` | Slow down browser actions by the given delay. |
+| `--list-languages` | Print the languages available for the configured edition and exit. |
+| `--experimental-sentinel` | Best-effort warm-up of Microsoft's anti-bot handshake. |
+| `-v`, `--verbose` | Verbose logging. |
+| `-h`, `--help` | Show the help text. |
+
+```bash
+# List the languages available for the configured edition
+./WindowsIsoDownloader --list-languages
+
+# Download the 32-bit image to a specific path
+./WindowsIsoDownloader --arch x86 -o /home/user/isos/windows10.iso
+
+# Only check that a download link can be obtained
+./WindowsIsoDownloader --dry-run
+```
+
 ## Configuration (`config.json`)
 
 The whole workflow is data-driven so that, if Microsoft changes its page, you
@@ -115,7 +156,12 @@ only need to edit `config.json` instead of the source code.
 | Field | Description |
 | --- | --- |
 | `DownloadFolder` | Folder where the ISO is saved. Both Windows (`C:\\isos`) and Linux (`/home/user/isos`) paths are accepted. A relative path (default `.`) is resolved against the working directory. |
-| `DownloadFilename` | File name of the resulting ISO. |
+| `DownloadFilename` | File name of the resulting ISO. It must be a plain name (no path separators). |
+| `PreferredArchitecture` | Image to prefer when the page offers several: `X64` (default), `X86`, `Arm64` or `Any`. |
+| `Attempts` | How many times the whole workflow is attempted (default `3`). |
+| `RetryDelaySeconds` | Base delay between attempts, in seconds; it grows exponentially and is capped at 60 s (default `5`). |
+| `Headless` | Run the browser without a visible window (default `true`). |
+| `ExperimentalSentinel` | Enable the experimental anti-bot warm-up (default `false`). |
 | `Actions` | Ordered list of browser actions used to reach the download link. |
 
 Each action has:
@@ -123,8 +169,10 @@ Each action has:
 | Field | Description |
 | --- | --- |
 | `Order` | Execution order (ascending). |
-| `Kind` | One of `Goto`, `SelectOption`, `Click`, `QuerySelector`. |
+| `Kind` | One of `Goto`, `SelectOption`, `Click`, `QuerySelector`, `WaitForSelector`. |
 | `WaitBeforeAction` | Optional delay in **milliseconds** before running the action. |
+| `Optional` | When `true`, a failure (for example, the element is not present) is logged and the workflow continues (default `false`). |
+| `Timeout` | Optional per-action timeout in milliseconds. |
 | `Parameters` | Action specific parameters (`Url`, `Selector`, `Values`). |
 
 Supported actions:
@@ -135,6 +183,11 @@ Supported actions:
 - **`Click`** – clicks the element matching `Parameters.Selector`.
 - **`QuerySelector`** – stores the element matching `Parameters.Selector`; the
   tool then reads its `href` to obtain the ISO link.
+- **`WaitForSelector`** – waits until the element matching
+  `Parameters.Selector` is attached to the DOM.
+
+`config.json` declares `"$schema": "./config.schema.json"`, so editors with JSON
+schema support offer completion and validation while you edit it.
 
 ### Updating the option values
 
@@ -144,21 +197,25 @@ language. You can find the current values directly on the page:
 1. Open the [Windows 10 ISO download page](https://www.microsoft.com/en-us/software-download/windows10ISO).
 2. Open the browser developer tools.
 3. Edition id: inspect the `#product-edition` `<select>` element. The value of
-   the "Windows 10 (multi-edition ISO)" option goes into action `Order: 2`.
+   the "Windows 10 (multi-edition ISO)" option goes into the `SelectOption` action
+   with `Order: 3`.
 4. Language: choose the edition, click **Confirm**, then inspect the
    `#product-languages` `<select>`. Copy the whole `value` of your language
-   (it looks like `{"id":"16067","language":"English"}`) into action `Order: 4`.
+   (it looks like `{"id":"16067","language":"English"}`) into the `SelectOption`
+   action with `Order: 5`.
 
 The tool is resilient: after running the actions it also looks for any
 `a[href*=".iso"]` link on the page, so small markup changes usually do not break
 it. When Microsoft offers more than one image — Windows 10 publishes both a
-**32-bit** and a **64-bit** ISO — the tool automatically picks the **64-bit** one.
+**32-bit** and a **64-bit** ISO — the tool automatically picks the one matching
+`PreferredArchitecture` (the **64-bit** image by default; use `--arch x86` for
+the 32-bit one).
 
 ### Available languages
 
 The **Windows 10 (multi-edition ISO)** edition (`2618`) offers the following 38
 languages. To download one of them, replace the `Values` of the `SelectOption`
-action with `Order: 4` in `config.json`:
+action with `Order: 5` in `config.json`:
 
 | Language | `id` | `Values` (paste this) |
 | --- | --- | --- |
@@ -201,7 +258,8 @@ action with `Order: 4` in `config.json`:
 | Turkish | `16094` | `{"id":"16094","language":"Turkish"}` |
 | Ukrainian | `16095` | `{"id":"16095","language":"Ukrainian"}` |
 
-> These `id` values belong to the Windows 10 edition `2618` (action `Order: 2`).
+> These `id` values belong to the Windows 10 edition `2618` (the `SelectOption`
+> action with `Order: 3`).
 > Languages you may miss (for example Indonesian, Malay, Persian or Vietnamese)
 > are simply not offered for this edition. The most future-proof option is still
 > to copy the whole `value` from the page as described above.
@@ -248,8 +306,14 @@ keeps it patched.
 
 | Code | Meaning |
 | --- | --- |
-| `0` | The ISO was downloaded successfully. |
-| `-1` | An error occurred (configuration, browser, anti-bot protection or I/O). |
+| `0` | Success (ISO downloaded, or a dry run / language listing finished). |
+| `1` | Unexpected error (bad command line). |
+| `2` | Configuration or page-layout error (no download link found). |
+| `3` | Network error while downloading. |
+| `4` | Anti-bot rejection (Sentinel). |
+| `5` | Disk error (permissions, I/O). |
+| `6` | Browser error (Firefox could not start). |
+| `130` | Cancelled with `Ctrl+C`. |
 
 ## Troubleshooting
 
@@ -257,11 +321,18 @@ keeps it patched.
   dependencies: `playwright install-deps firefox` (see *Requirements*).
 - **`Download button was not found` / anti-bot** – Microsoft protects the
   download connector with a mechanism called *Sentinel* that may reject a
-  browser session, especially under heavy or automated use. The tool already
-  retries up to 3 times with a fresh session; if it still fails, wait a few
-  minutes and try again.
+  browser session, especially under heavy or automated use. The tool retries up
+  to `Attempts` times (default 3) with a fresh browser session and a growing
+  delay; if it still fails, wait a few minutes and try again. Running with
+  `--headed` and `--verbose` shows what the page is doing.
+- **The download was interrupted** – nothing is lost: the partial data stays in
+  `*.part` and the next run resumes it with an HTTP `Range` request. Delete the
+  `.part` file to start over.
 - **Permission errors** – make sure `DownloadFolder` is writable. On Windows
   run the terminal as administrator; on Linux check the folder permissions.
+- **The page changed** – use `--dry-run --headed` to watch the automation, save a
+  diagnostic screenshot/HTML (written to `diagnostics/` when a run fails) and
+  adjust `config.json` accordingly.
 
 ## License
 

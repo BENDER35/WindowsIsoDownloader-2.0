@@ -26,8 +26,18 @@
     <PackageReference Include="Microsoft.Playwright" Version="1.63.0" />
   </ItemGroup>
 
+  <!-- The xUnit test project lives under tests/. Keep it out of this project's
+       default recursive compile glob. -->
+  <ItemGroup>
+    <Compile Remove="tests/**" />
+    <None Remove="tests/**" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="config.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="config.schema.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

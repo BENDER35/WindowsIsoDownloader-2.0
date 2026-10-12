@@ -364,4 +364,8 @@ FodyWeavers.xsd
 
 # WindowsIsoDownloader
 *.iso
+*.part
 release/
+dist/
+artifacts/
+diagnostics/

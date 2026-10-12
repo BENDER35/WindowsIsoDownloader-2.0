@@ -41,13 +41,41 @@ Because the workflow is pure data, the same binary can fetch Windows 11
 ```
 WindowsIsoDownloader-2.0/
 ├── WindowsIsoDownloader.csproj   # SDK-style project, net10.0, Playwright reference
-├── WindowsIsoDownloader.sln      # Visual Studio solution
-├── WindowsIsoDownloader.cs       # Entry point + whole workflow (top-level statements)
-├── Config.cs                     # POCOs that mirror config.json
+├── WindowsIsoDownloader.sln      # Solution (application + tests)
+├── global.json                   # Pins the .NET 10 SDK feature band
+├── .editorconfig                 # Shared formatting rules
+├── Program.cs                    # Entry point: parses the CLI and runs App
+├── App.cs                        # Workflow orchestrator (browser + download)
+├── Configuration/
+│   ├── Config.cs                 # POCOs + enums that mirror config.json
+│   ├── ConfigLoader.cs           # Load + validate config.json
+│   └── ConfigException.cs
+├── Cli/
+│   ├── CommandLineOptions.cs     # Argument parser + --help text
+│   └── ExitCodes.cs              # Granular exit codes
+├── Browser/
+│   ├── ActionRunner.cs           # Executes the config actions
+│   ├── IsoLinkResolver.cs        # Finds + selects the ISO link
+│   ├── LanguageLister.cs         # Implements --list-languages
+│   ├── LinkValidator.cs          # HTTPS + microsoft.com + .iso allowlist
+│   ├── BrowserErrors.cs          # Classifies recoverable Playwright errors
+│   └── SentinelPrimer.cs         # Experimental anti-bot warm-up
+├── Download/
+│   ├── HttpClientExtensions.cs   # Resumable, streamed download
+│   ├── StreamExtensions.cs       # Buffer copy that reports progress
+│   ├── DownloadProgress.cs       # Bytes / total / speed / ETA
+│   ├── ProgressRenderer.cs       # Renders the progress bar
+│   └── IsoValidator.cs           # UDF/ISO9660 signature check
+├── Diagnostics/
+│   └── DiagnosticsWriter.cs      # Failure screenshot + HTML
+├── Util/
+│   ├── PathSanitizer.cs          # File-name validation
+│   └── ByteFormatter.cs          # Human readable sizes / speeds / ETA
 ├── config.json                   # The action script (editable without recompiling)
-├── Extension/
-│   ├── HttpClientExtensions.cs   # DownloadAsync: streamed download + progress
-│   └── StreamExtensions.cs       # CopyToAsync: buffer copy that reports progress
+├── config.schema.json            # JSON Schema for config.json
+├── tests/
+│   └── WindowsIsoDownloader.Tests/  # xUnit test project
+├── .github/workflows/ci.yml      # Build + test, publish release assets
 ├── readme.md / readme.es.md      # User documentation (EN / ES)
 └── docs/
     ├── TECHNICAL_GUIDE.md        # This file (EN)
@@ -56,16 +84,23 @@ WindowsIsoDownloader-2.0/
 
 ## 4. Configuration model
 
-`config.json` is deserialized into the classes in `Config.cs`:
+`config.json` is deserialized into the classes in `Configuration/Config.cs`:
 
 ```
 Config
  ├── DownloadFolder : string
  ├── DownloadFilename : string
+ ├── PreferredArchitecture : PreferredArchitecture  // X64 | X86 | Arm64 | Any
+ ├── Attempts : int
+ ├── RetryDelaySeconds : int
+ ├── Headless : bool
+ ├── ExperimentalSentinel : bool
  └── Actions : List<BrowserAction>
         ├── Order : int
-        ├── Kind : string            // Goto | SelectOption | Click | QuerySelector
+        ├── Kind : ActionKind        // Goto | SelectOption | Click | QuerySelector | WaitForSelector
         ├── WaitBeforeAction : int?  // milliseconds
+        ├── Optional : bool          // failure is logged and skipped when true
+        ├── Timeout : int?           // per-action timeout in milliseconds
         └── Parameters : BrowserActionParameters
                ├── Url : string?
                ├── Selector : string?
@@ -74,10 +109,14 @@ Config
 
 `JsonSerializerOptions` enables `PropertyNameCaseInsensitive`,
 `ReadCommentHandling = Skip` and `AllowTrailingCommas`, so the file is tolerant
-to casing, comments and trailing commas. This makes it easier to hand-edit.
+to casing, comments and trailing commas. This makes it easier to hand-edit. The
+enums are serialized by name (`"Kind": "Goto"`,
+`"PreferredArchitecture": "X64"`), and `ConfigLoader.Validate` rejects missing
+or inconsistent parameters (for example a `Click` without a selector, or a
+`DownloadFilename` that contains a path separator) with a clear message.
 
-The actions are sorted by `Order` and interpreted by a small interpreter
-(`RunActionsAsync`) whose action set is intentionally minimal:
+The actions are sorted by `Order` and interpreted by `ActionRunner.RunAsync`
+(in `Browser/ActionRunner.cs`):
 
 | `Kind` | Effect on the page |
 | --- | --- |
@@ -85,6 +124,12 @@ The actions are sorted by `Order` and interpreted by a small interpreter
 | `SelectOption` | `page.SelectOptionAsync(selector, values)` |
 | `Click` | `page.ClickAsync(selector)` |
 | `QuerySelector` | `page.QuerySelectorAsync(selector)`, storing the handle |
+| `WaitForSelector` | `page.WaitForSelectorAsync(selector, State = Attached)` |
+
+An action marked `"Optional": true` never aborts the workflow: a failure (with
+`Timeout` set to a small value it fails fast) is logged and the next action runs.
+The shipped `config.json` uses this to dismiss an optional cookie banner before
+interacting with the page.
 
 Keeping the workflow in data (rather than hard-coded) is the core design
 decision: when Microsoft renumbers an option it is a one-line change in
@@ -96,25 +141,31 @@ decision: when Microsoft renumbers an option it is a one-line change in
 Start
   │
   ├─ 1. Set console output encoding to UTF-8 (progress bar glyphs)      [best effort]
-  ├─ 2. Read and deserialize config.json  ── invalid? ──► exit -1
-  ├─ 3. Validate config (folder, filename, non-empty actions)
-  ├─ 4. Create DownloadFolder; compute absolute output path
-  ├─ 5. Install Playwright browser dependencies (firefox)  ── fail? ──► exit -1
-  ├─ 6. Playwright.CreateAsync() + Firefox.LaunchAsync()
+  ├─ 2. Parse the command line (--config/--output/--arch/...)  ── invalid? ──► exit 1
+  ├─ 3. Read + deserialize + validate config.json  ── invalid? ──► exit 2
+  ├─ 4. Apply CLI overrides (output, architecture, headless, sentinel)
+  ├─ 5. Create the output folder; compute the absolute output path
+  ├─ 6. ISO already present and no --force? → exit 0
+  ├─ 7. Ensure the Playwright Firefox build is installed  ── fail? ──► exit 6
+  ├─ 8. Playwright.CreateAsync()
   │
-  ├─ 7. Retry loop (up to 3 attempts, fresh browser context each time):
-  │        a. New context (Locale = en-US) + new page
-  │        b. RunActionsAsync(page, actions)   → maybe a QuerySelector handle
-  │        c. ResolveIsoUrlAsync(page, handle):
-  │              - poll for every `a[href*=".iso"]` link (10 tries / 1 s)
-  │              - prefer the 64-bit image when several are offered
-  │              - otherwise use the handle's href, then the first link
-  │        d. If a link was found → stop retrying
-  │           else wait 5 s and retry
+  ├─ 9. When --list-languages: navigate, confirm the edition, dump the
+  │      languages and exit 0.
   │
-  ├─ 8. If no link → exit -1
-  ├─ 9. HttpClient.DownloadAsync(isoUrl, FileStream, progress)  → writes the ISO
-  ├─ 10. Print success and exit 0
+  ├─ 10. Retry loop (up to Attempts, exponential backoff, persistent profile):
+  │        a. LaunchPersistentContextAsync (fresh browser process per attempt)
+  │        b. Attach a response listener that flags a Sentinel rejection
+  │        c. (optional) microsoft.com warm-up + experimental Sentinel primer
+  │        d. ActionRunner.RunAsync(page, actions) → maybe a QuerySelector handle
+  │        e. IsoLinkResolver.ResolveAsync(...)    → the preferred .iso link
+  │        f. On failure: save a screenshot + HTML in diagnostics/ and retry
+  │
+  ├─ 11. No link → exit 4 when Sentinel rejected, else exit 2
+  ├─ 12. Validate the link (HTTPS + *.microsoft.com + `.iso`)  ── invalid? ──► exit 2
+  ├─ 13. When --dry-run: print the link and exit 0
+  ├─ 14. Download (resumable, streamed, with progress)  ── Ctrl+C ──► exit 130
+  │        - network error → exit 3;  disk error → exit 5
+  └─ 15. Print success and exit 0
 ```
 
 ### 5.1 Why the retry loop exists
@@ -128,44 +179,79 @@ that answers with:
 ```
 
 when it distrusts a browser session (common with automated or repeated access).
-A brand-new browser context usually gets a fresh, accepted session, so the tool
-retries up to three times. The failure is not caused by the code; it is a
-server-side decision, and the tool degrades gracefully with a clear message.
+The tool therefore:
+
+1. Uses a **persistent browser profile** (`LaunchPersistentContextAsync`) so the
+   session looks more like a real user's.
+2. Attaches a **response listener** (`page.Response`) that inspects the connector
+   response and detects `ErrorSettings.SentinelReject`, so the final message and
+   exit code (`4`) distinguish a rejection from a layout change (`2`).
+3. Retries up to `Attempts` times (default 3) with a **fresh browser process**
+   each time and an **exponential backoff** (`RetryDelaySeconds * 2^(n-1)`,
+   capped at 60 s, plus jitter).
+
+The failure is not caused by the code; it is a server-side decision, and the tool
+degrades gracefully with a clear message and a diagnostic capture. The
+`--experimental-sentinel` flag adds a best-effort warm-up of the public
+`vlscppe` / `ov-df` tag requests, but it is **unverified** and may not help.
 
 ### 5.2 Link resolution
 
 The historically fragile point was the CSS selector for the download button
 (`#card-info-content .button`). Microsoft's markup changed the class, so the
-code now:
+code now (`Browser/IsoLinkResolver.cs`):
 
 1. Polls the page for every anchor whose `href` contains `.iso`, for a few
    seconds, because the download section renders asynchronously.
-2. When the page offers more than one image, **prefers the 64-bit one**: Windows
-   10 publishes a 32-bit (`..._x32v1.iso`) and a 64-bit (`..._x64v1.iso`) image,
-   so the code selects the link whose URL contains `x64`.
-3. If no `.iso` link contains `x64`, it falls back to the element of the
-   configured `QuerySelector` action, and finally to the first `.iso` link.
+2. When the page offers more than one image, picks the one matching
+   `PreferredArchitecture`: for `X64` (the default) it looks for `x64`/`amd64`,
+   for `X86` for `x86`/`x32`/`i386`, and for `Arm64` for `arm64`/`aarch64`.
+   Windows 10 publishes a 32-bit (`..._x32v1.iso`) and a 64-bit
+   (`..._x64v1.iso`) image.
+3. If no link matches the requested architecture, it falls back to the element
+   of the configured `QuerySelector` action, and finally to the first `.iso`
+   link.
 
 The page returns the links as a JSON array string that the code deserializes with
 `System.Text.Json` (Playwright's own `EvaluateAsync<T>` deserializer does not
-round-trip a `List<string>` reliably). The final URL is validated
-(`Contains(".iso")`) before downloading.
+round-trip a `List<string>` reliably). Before downloading, the URL is validated
+by `LinkValidator` (HTTPS, a `microsoft.com` host, and a `.iso` path) and only
+its scheme/host/path are logged — never the full signed URL.
 
-## 6. Downloading with progress
+## 6. Downloading with progress and resume
 
-`HttpClientExtensions.DownloadAsync` requests the URL with
-`HttpCompletionOption.ResponseHeadersRead` so the response is streamed instead
-of buffered, then delegates to `StreamExtensions.CopyToAsync`. That method
-copies the stream in 80 KiB chunks and reports the total number of bytes read
-through an `IProgress<long>`. `DownloadAsync` converts bytes into a `0..1`
-ratio and reports it as `IProgress<float>`, which the program renders as a
-100-column bar.
+`HttpClientExtensions.DownloadFileAsync` writes to `destinationPath + ".part"`
+instead of the final path, so an interrupted run can be resumed:
 
-The `Progress<T>` callbacks are dispatched on the captured synchronization
-context; because the value is a simple float and the console writes are cheap,
-this is sufficient. The progress renderer guards `Console.SetCursorPosition`
-with `!Console.IsOutputRedirected` and a `try/catch (IOException)` so redirected
-output (CI logs, files) does not crash the tool.
+1. If a `.part` file exists, the request is sent with a `Range: bytes=<n>-`
+   header. A `206 Partial Content` continues the file (opened with
+   `FileMode.Append`); a `200 OK` means the server ignored the range, so the
+   download restarts from the beginning. A `416 Range Not Satisfiable` means the
+   `.part` file already holds at least as much as the server offers: when its
+   size matches the total reported in `Content-Range` it is finalized directly.
+2. The response is streamed (`HttpCompletionOption.ResponseHeadersRead`) and
+   copied in 80 KiB chunks by `StreamExtensions.CopyToAsync`, which reports the
+   number of bytes copied through an `IProgress<long>`.
+3. `DownloadFileAsync` turns that into a `DownloadProgress` (bytes received /
+   total / average speed / ETA). When the total size is known and the result is
+   short, it throws instead of silently keeping a truncated file.
+4. A quick sanity check (`IsoValidator.LooksLikeIso`) looks for the ISO9660
+   (`CD001`) or UDF (`BEA01`/`NSR02`/`NSR03`) volume signature at sector 16 and
+   warns when it is missing.
+5. Only then is the `.part` file renamed to the final name.
+
+If the response `Content-Type` is `text/*` the download is aborted (the server
+returned an HTML error page instead of an image). The `HttpClient` is created
+with a `SocketsHttpHandler` (`ConnectTimeout = 30 s`) and **no global timeout**,
+because a multi-gigabyte ISO can take a long time on slow links.
+`Console.CancelKeyPress` is wired to a `CancellationToken`, so `Ctrl+C` stops the
+transfer, keeps the `.part` file and exits with code `130`.
+
+`ProgressRenderer` draws a 40-column bar with size, speed and ETA. It updates a
+single console line (`\r` + padding) on interactive terminals, and emits a line
+every 10% when the output is redirected (CI logs, files). All numbers are
+formatted with the invariant culture, so the decimal separator is always `.`
+regardless of the OS locale.
 
 ## 7. Cross-platform notes
 
@@ -204,9 +290,13 @@ dotnet publish -c Release -r win-x64 --self-contained true \
   -p:PublishSingleFile=true
 ```
 
-`config.json` is copied to the output folder (`CopyToOutputDirectory=Always`).
-At runtime the tool first looks for `config.json` next to the executable and
-falls back to the current working directory.
+`config.json` and `config.schema.json` are copied to the output folder
+(`CopyToOutputDirectory=Always`). At runtime the tool first looks for
+`config.json` next to the executable (unless `--config <path>` is given) and
+falls back to the current working directory. The `.github/workflows/ci.yml`
+workflow builds and tests on every push/PR, and on a `v*` tag it publishes the
+`linux-x64`, `win-x64` and `win-x86` self-contained packages plus a source zip
+and a `SHA256SUMS.txt`.
 
 ### 8.1 32-bit (x86) and ARM support
 
@@ -250,8 +340,17 @@ runtime limitations above.
 
 | Code | Meaning |
 | --- | --- |
-| `0` | ISO downloaded successfully. |
-| `-1` | Configuration error, Playwright/browser failure, anti-bot rejection, or file I/O error. |
+| `0` | Success (ISO downloaded, dry run, or `--list-languages`). |
+| `1` | Unexpected error / bad command line. |
+| `2` | Configuration error or page-layout change (no link found). |
+| `3` | Network error while downloading. |
+| `4` | Anti-bot rejection (Sentinel). |
+| `5` | Disk error (permissions, I/O). |
+| `6` | Browser error (Firefox could not start). |
+| `130` | Cancelled with `Ctrl+C`. |
+
+The codes are defined in `Cli/ExitCodes.cs` and let scripts react to the actual
+failure class instead of parsing the log.
 
 ## 10. Maintenance checklist
 

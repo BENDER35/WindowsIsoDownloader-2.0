@@ -1,7 +1,13 @@
 {
+	"$schema": "./config.schema.json",
 	"DownloadFolder": ".",
 	"DownloadFilename": "windows10.iso",
-	"Actions":	[
+	"PreferredArchitecture": "X64",
+	"Attempts": 3,
+	"RetryDelaySeconds": 5,
+	"Headless": true,
+	"ExperimentalSentinel": false,
+	"Actions": [
 		{
 			"Order": 1,
 			"Kind": "Goto",
@@ -11,6 +17,15 @@
 		},
 		{
 			"Order": 2,
+			"Kind": "Click",
+			"Optional": true,
+			"Timeout": 2000,
+			"Parameters": {
+				"Selector": "#onetrust-reject-all-handler"
+			}
+		},
+		{
+			"Order": 3,
 			"Kind": "SelectOption",
 			"Parameters": {
 				"Selector": "#product-edition",
@@ -18,14 +33,14 @@
 			}
 		},
 		{
-			"Order": 3,
+			"Order": 4,
 			"Kind": "Click",
 			"Parameters": {
 				"Selector": "#submit-product-edition"
 			}
 		},
 		{
-			"Order": 4,
+			"Order": 5,
 			"Kind": "SelectOption",
 			"WaitBeforeAction": 4000,
 			"Parameters": {
@@ -34,14 +49,14 @@
 			}
 		},
 		{
-			"Order": 5,
+			"Order": 6,
 			"Kind": "Click",
 			"Parameters": {
 				"Selector": "#submit-sku"
 			}
 		},
 		{
-			"Order": 6,
+			"Order": 7,
 			"Kind": "QuerySelector",
 			"WaitBeforeAction": 8000,
 			"Parameters": {
