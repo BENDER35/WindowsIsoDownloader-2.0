@@ -1,5 +1,5 @@
 {
-	"DownloadFolder": "C:\\",
+	"DownloadFolder": ".",
 	"DownloadFilename": "windows11.iso",
 	"Actions":	[
 		{
@@ -14,7 +14,7 @@
 			"Kind": "SelectOption",
 			"Parameters": {
 				"Selector": "#product-edition",
-				"Values": "2935"
+				"Values": "3813"
 			}
 		},
 		{
@@ -27,11 +27,11 @@
 		{
 			"Order": 4,
 			"Kind": "SelectOption",
-			"WaitBeforeAction": 2500,
+			"WaitBeforeAction": 4000,
 			"Parameters": {
 				"Selector": "#product-languages",
-				"Values": "{\"id\":\"17442\",\"language\":\"English\"}"
-				
+				"Values": "{\"id\":\"27160\",\"language\":\"English\"}"
+
 			}
 		},
 		{
@@ -44,9 +44,9 @@
 		{
 			"Order": 6,
 			"Kind": "QuerySelector",
-			"WaitBeforeAction": 5000,
+			"WaitBeforeAction": 8000,
 			"Parameters": {
-				"Selector": "#card-info-content .button"
+				"Selector": "#card-info-content a"
 			}
 		}
 	]
